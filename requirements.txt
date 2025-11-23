@@ -1,0 +1,8 @@
+streamlit
+pandas
+pyinstaller
+presidio-analyzer
+presidio-anonymizer
+spacy
+# You’ll install the model separately:
+# python -m spacy download en_core_web_lg
