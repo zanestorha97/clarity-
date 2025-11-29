@@ -5,7 +5,7 @@ A tiny web app that uses [Microsoft Presidio](https://microsoft.github.io/presid
 
 ## Features
 
-- **Privacy-First**: K-anonymity (k=5) applied to Role, Team, Work_Location, and Employment_Status
+- **Privacy-First**: K-anonymity (k=5) applied to Role, Team
 - **No Text Content**: Message text is completely removed
 - **No PII**: Names, emails, and identifiable information excluded
 - **Timestamp Coarsening**: Timestamps rounded to nearest minute to prevent timing attacks
