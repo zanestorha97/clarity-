@@ -98,7 +98,11 @@ streamlit run app.py --server.port 8504
   "thread_ts": "1700000012.789456",
   "reply_count": 5,
   "reply_users": ["U024BE7LH", "U7812KD91"],
-  "latest_reply": "1700003712.123456"
+  "latest_reply": "1700003712.123456",
+  "edited": {
+    "user": "U024BE7LH",
+    "ts": "1700000025.000000"
+  }
 }
 ```
 
@@ -108,6 +112,10 @@ streamlit run app.py --server.port 8504
 {
   "user": "E8A3F2D9C1",
   "ts": "1700000012",
+  "edited": {
+    "user": "E8A3F2D9C1",
+    "ts": "1700000024"
+  },
   "thread_ts": "1700000012",
   "reply_count": 5,
   "reply_users_count": 2,

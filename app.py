@@ -172,8 +172,8 @@ def combine_data(uploaded_file, zip_uploaded_file):
         
         employee_data["Tenure_Band"] = employee_data["Date_of_Hire"].apply(calculate_tenure_band)
 
-    # Apply k-anonymity to all fields to prevent quasi-identifier linkage
-    anonymity_fields = ["Role", "Team", "Work_Location", "Employment_Status", "Employment_Type", "Tenure_Band"]
+    # Apply k-anonymity ONLY to Role and Team
+    anonymity_fields = ["Role", "Team"]
     for field in anonymity_fields:
         if field in employee_data.columns:
             employee_data = apply_k_anonymity(employee_data, field, k=5)
@@ -197,7 +197,6 @@ def extract_zip_files(zip_uploaded_file, employee_data, list_of_bots_ids):
             "Employment_Status": row.get("Employment_Status") if "Employment_Status" in row else None,
             "Employment_Type": row.get("Employment_Type") if "Employment_Type" in row else None,
             "Tenure_Band": row.get("Tenure_Band") if "Tenure_Band" in row else None,
-            "Date_of_Hire": row.get("Date_of_Hire") if "Date_of_Hire" in row else None,
         }
 
     output = {
@@ -210,6 +209,7 @@ def extract_zip_files(zip_uploaded_file, employee_data, list_of_bots_ids):
         files = [f for f in zip_object.namelist() if '__MACOSX' not in f]
 
         channels = safe_json_read(zip_object, next((f for f in files if f.endswith("channels.json")), None))
+        groups = safe_json_read(zip_object, next((f for f in files if f.endswith("groups.json")), None)) if any(f.endswith("groups.json") for f in files) else []
         dms = safe_json_read(zip_object, next((f for f in files if f.endswith("dms.json")), None)) if any(f.endswith("dms.json") for f in files) else []
         mpims = safe_json_read(zip_object, next((f for f in files if f.endswith("mpims.json")), None)) if any(f.endswith("mpims.json") for f in files) else []
         users_json = safe_json_read(zip_object, next((f for f in files if f.endswith("users.json")), None))
@@ -223,7 +223,7 @@ def extract_zip_files(zip_uploaded_file, employee_data, list_of_bots_ids):
     # CONVERSATIONS
     dm_counter = 1
     channel_counter = 1
-    conv_meta_list = dms + mpims + channels
+    conv_meta_list = dms + mpims + channels + groups
     conv_id_map = {}  # Map original names to clarity IDs
 
     def generate_conversation_id(conv_original_id, is_dm):
@@ -254,14 +254,30 @@ def extract_zip_files(zip_uploaded_file, employee_data, list_of_bots_ids):
         conv_name = conv.get("name", conv.get("id", ""))
         conv_id_map[conv_name] = conv_id
 
-        output["conversations"].append({
+        # Build conversation metadata
+        conv_data = {
             "ConversationID": conv_id,
             "Type": conv_type,
             "Participants": ",".join(members),
             "MemberCount": len(members),
-            "Created": conv.get("created"),
-            "IsArchived": conv.get("is_archived", False)
-        })
+        }
+        
+        # Add created timestamp if present
+        if conv.get("created"):
+            conv_data["Created"] = conv.get("created")
+        
+        # Add creator (anonymized) if present
+        if conv.get("creator"):
+            creator_clarity = employee_hashes.get(conv.get("creator"), {}).get("Clarity_ID")
+            if creator_clarity:
+                conv_data["Creator"] = creator_clarity
+        
+        # Add archive status
+        if conv.get("is_archived") is not None:
+            conv_data["IsArchived"] = conv.get("is_archived")
+        
+        
+        output["conversations"].append(conv_data)
 
     # MESSAGES - organized by conversation and date
     with ZipFile(zip_uploaded_file, 'r') as zip_object:
@@ -270,7 +286,7 @@ def extract_zip_files(zip_uploaded_file, employee_data, list_of_bots_ids):
         # Find all message files
         message_files = [f for f in zip_object.namelist() if f.endswith(".json") and '__MACOSX' not in f 
                         and not f.endswith("users.json") and not f.endswith("channels.json") 
-                        and not f.endswith("dms.json") and not f.endswith("mpims.json")]
+                        and not f.endswith("groups.json") and not f.endswith("dms.json") and not f.endswith("mpims.json")]
         
         if not message_files:
             raise ValueError("No message files found in Slack export. Please ensure your export includes message history data.")
@@ -314,6 +330,18 @@ def extract_zip_files(zip_uploaded_file, employee_data, list_of_bots_ids):
                                 'user': clarity,
                                 'ts': round_timestamp(msg.get('ts', '0'))
                             }
+                            
+                            # Add edited metadata if present
+                            if msg.get('edited'):
+                                edited_info = {}
+                                if msg['edited'].get('ts'):
+                                    edited_info['ts'] = round_timestamp(msg['edited'].get('ts'))
+                                if msg['edited'].get('user'):
+                                    editor_clarity = employee_hashes.get(msg['edited'].get('user'), {}).get('Clarity_ID')
+                                    if editor_clarity:
+                                        edited_info['user'] = editor_clarity
+                                if edited_info:
+                                    anonymized_msg['edited'] = edited_info
 
                             # Add thread_ts if present (rounded)
                             if msg.get('thread_ts'):
@@ -431,7 +459,7 @@ def main():
 
     st.divider()
     
-    st.info("🔒 K-anonymity (k=5) automatically applied to: Role, Team, Work_Location, Employment_Status, Employment_Type, and Tenure_Band")
+    st.info("K-anonymity (k=5) automatically applied to: Role, Team, Work_Location, Employment_Status, Employment_Type, and Tenure_Band")
     
     st.divider()
     
