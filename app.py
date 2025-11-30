@@ -75,7 +75,7 @@ def apply_k_anonymity(df, column, k=5):
     return df_modified
 
 
-def combine_data(uploaded_file, zip_uploaded_file, anonymity_field=None):
+def combine_data(uploaded_file, zip_uploaded_file):
     delimiter = detect_delimiter(uploaded_file)
     df = pd.read_csv(uploaded_file, delimiter=delimiter)
 
@@ -172,13 +172,9 @@ def combine_data(uploaded_file, zip_uploaded_file, anonymity_field=None):
         
         employee_data["Tenure_Band"] = employee_data["Date_of_Hire"].apply(calculate_tenure_band)
 
-    # Apply k-anonymity to primary organizational field (Role OR Team)
-    if anonymity_field and anonymity_field in employee_data.columns:
-        employee_data = apply_k_anonymity(employee_data, anonymity_field, k=5)
-    
-    # Apply k-anonymity to all additional fields to prevent quasi-identifier linkage
-    additional_fields = ["Work_Location", "Employment_Status", "Employment_Type", "Tenure_Band"]
-    for field in additional_fields:
+    # Apply k-anonymity to all fields to prevent quasi-identifier linkage
+    anonymity_fields = ["Role", "Team", "Work_Location", "Employment_Status", "Employment_Type", "Tenure_Band"]
+    for field in anonymity_fields:
         if field in employee_data.columns:
             employee_data = apply_k_anonymity(employee_data, field, k=5)
 
@@ -435,27 +431,25 @@ def main():
 
     st.divider()
     
-    # K-anonymity configuration
-    st.subheader("Privacy Settings")
-    anonymity_field = st.radio(
-        "Apply k-anonymity to:",
-        options=["Role", "Team", "None"],
-        index=0
-    )
+    st.info("🔒 K-anonymity (k=5) automatically applied to: Role, Team, Work_Location, Employment_Status, Employment_Type, and Tenure_Band")
     
     st.divider()
     
     try:
-        df, bot_ids = combine_data(uploaded_file, zip_uploaded_file, anonymity_field if anonymity_field != "None" else None)
+        df, bot_ids = combine_data(uploaded_file, zip_uploaded_file)
         
         # Show data preview
         st.success(f"Data loaded: {len(df)} employees, {len(bot_ids)} bots detected")
         
         with st.expander("Preview Employee Data (k-anonymity applied)"):
-            preview_df = df[['slack_id', 'Clarity_ID', 'Role', 'Team']].head(10)
+            # Show only available columns
+            available_cols = ['slack_id', 'Clarity_ID']
+            for col in ['Role', 'Team', 'Work_Location', 'Employment_Status', 'Employment_Type', 'Tenure_Band']:
+                if col in df.columns:
+                    available_cols.append(col)
+            preview_df = df[available_cols].head(10)
             st.dataframe(preview_df, use_container_width=True)
-            anonymity_msg = f"K-anonymity applied to: {anonymity_field}" if anonymity_field != "None" else "No k-anonymity applied"
-            st.caption(f"Showing first 10 of {len(df)} employees. {anonymity_msg} (values with <5 occurrences → 'Others')")
+            st.caption(f"Showing first 10 of {len(df)} employees. K-anonymity applied to all filters (values with <5 occurrences → 'Others')")
         
     except ValueError as e:
         st.error(f"{str(e)}")
